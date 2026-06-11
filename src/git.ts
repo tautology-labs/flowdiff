@@ -25,7 +25,7 @@ export function resolveRef(ref: string, cwd: string): string {
 
 const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const SKIP_RE =
-  /(^|\/)(node_modules|dist|build|out|coverage|\.next|vendor)(\/|$)|\.d\.ts$|\.min\.js$/;
+  /(^|\/)(node_modules|dist|build|out|coverage|\.next|vendor|cdk\.out|\.serverless|__generated__)(\/|$)|\.d\.ts$|\.min\.js$/;
 
 export function listSourceFiles(ref: string, cwd: string): string[] {
   const out =

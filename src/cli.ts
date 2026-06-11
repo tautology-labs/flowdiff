@@ -42,9 +42,12 @@ function parseRevs(args: string[]): { base: string; head: string } {
 function findFn(graph: Graph, name: string): FnInfo[] {
   const hits: FnInfo[] = [];
   for (const fn of graph.fns.values()) {
-    if (fn.name === name || fn.name.split(".").pop() === name || fn.id === name) {
-      hits.push(fn);
-    }
+    // `name#fn` queries match by id suffix, so any unique path tail works:
+    // "handler.ts#getSecrets" or "src/lambda/handler.ts#getSecrets".
+    const match = name.includes("#")
+      ? fn.id === name || fn.id.endsWith("/" + name)
+      : fn.name === name || fn.name.split(".").pop() === name;
+    if (match) hits.push(fn);
   }
   return hits;
 }
@@ -101,6 +104,9 @@ function main(): void {
       if (ids.size > 1) {
         process.stderr.write(`flowdiff: "${fnName}" is ambiguous — pick one:\n`);
         for (const id of [...ids].sort()) process.stderr.write(`  ${id}\n`);
+        process.stderr.write(
+          `any unique suffix works, e.g. flowdiff fn "${[...ids][0].split("/").pop()}"\n`,
+        );
         process.exit(1);
       }
     }
