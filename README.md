@@ -39,7 +39,7 @@ flowdiff fn processRefund   # before/after diff of one function
 flowdiff --json             # structured output — scripts, or context for an AI reviewer
 ```
 
-Run it from anywhere inside a git repo. `+` added, `−` removed, `~` body changed, `*` callee not defined in this repo.
+Run it from anywhere inside a git repo. `+` added, `−` removed, `~` body changed, `→` renamed/moved, `*` callee not defined in this repo.
 
 ## Install
 
@@ -55,13 +55,14 @@ Node ≥ 18. The only runtime dependency is the TypeScript compiler, which is al
 2. Parses every file with the TypeScript compiler API and extracts named functions, methods, and arrow-function bindings, plus every call made inside them (calls inside anonymous closures attribute to the nearest enclosing named function; calls to a function's own parameters are skipped as callback invocations).
 3. Builds a call graph per revision. Call sites resolve by name, preferring same-file definitions; unresolved callees become external nodes, with a noise filter for `map`/`push`/`then`-style builtins.
 4. Diffs the two graphs — functions by `file#name` identity with body-hash change detection, edges by endpoint pair — and renders the delta grouped by file.
+5. Detects renames and moves: a removed and an added function whose *name-blinded* bodies hash identically (and match no other candidate) are reported as `→ old → new`, and edges are compared through the rename so the surrounding graph doesn't show phantom churn.
 
 Name-based call resolution is a deliberate v0 heuristic: it's wrong in the ways dynamic dispatch is wrong, and right often enough to tell the review story.
 
 ## Not yet
 
 - Branch-level deltas (new `if`/`switch` arms inside a changed function)
-- Rename detection (a renamed function currently shows as remove + add)
+- Rename detection for *edited* renames (exact-body renames are detected; renamed-and-changed still shows as remove + add)
 - Other languages (the extractor is one ~100-line file; tree-sitter would generalize it)
 - Interactive TUI navigation (arrow keys through the graph, expanding diffs inline)
 - A GitHub Action that posts the flow summary as a PR comment

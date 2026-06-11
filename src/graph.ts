@@ -92,13 +92,46 @@ export interface GraphDiff {
   added: FnInfo[];
   removed: FnInfo[];
   modified: { before: FnInfo; after: FnInfo }[];
+  /** Same code under a new name (or new file — a move). */
+  renamed: { before: FnInfo; after: FnInfo }[];
   addedEdges: Edge[];
   removedEdges: Edge[];
 }
 
+/**
+ * Pair removed↔added functions whose name-blinded bodies hash identically.
+ * Only unambiguous 1:1 hash matches count — two identical helpers renamed in
+ * one change stay as add/remove rather than guessing which became which.
+ */
+function detectRenames(
+  added: FnInfo[],
+  removed: FnInfo[],
+): { before: FnInfo; after: FnInfo }[] {
+  const group = (fns: FnInfo[]) => {
+    const m = new Map<string, FnInfo[]>();
+    for (const fn of fns) {
+      const arr = m.get(fn.renameHash);
+      if (arr) arr.push(fn);
+      else m.set(fn.renameHash, [fn]);
+    }
+    return m;
+  };
+  const addedByHash = group(added);
+  const removedByHash = group(removed);
+
+  const renamed: { before: FnInfo; after: FnInfo }[] = [];
+  for (const [hash, befores] of removedByHash) {
+    const afters = addedByHash.get(hash);
+    if (befores.length === 1 && afters?.length === 1) {
+      renamed.push({ before: befores[0], after: afters[0] });
+    }
+  }
+  return renamed;
+}
+
 export function diffGraphs(base: Graph, head: Graph): GraphDiff {
-  const added: FnInfo[] = [];
-  const removed: FnInfo[] = [];
+  let added: FnInfo[] = [];
+  let removed: FnInfo[] = [];
   const modified: { before: FnInfo; after: FnInfo }[] = [];
 
   for (const [id, fn] of head.fns) {
@@ -110,12 +143,25 @@ export function diffGraphs(base: Graph, head: Graph): GraphDiff {
     if (!head.fns.has(id)) removed.push(fn);
   }
 
-  const addedEdges = [...head.edges.entries()]
-    .filter(([key]) => !base.edges.has(key))
-    .map(([, e]) => e);
-  const removedEdges = [...base.edges.entries()]
-    .filter(([key]) => !head.edges.has(key))
-    .map(([, e]) => e);
+  const renamed = detectRenames(added, removed);
+  const renamedAfterIds = new Set(renamed.map((r) => r.after.id));
+  const renamedBeforeIds = new Set(renamed.map((r) => r.before.id));
+  added = added.filter((fn) => !renamedAfterIds.has(fn.id));
+  removed = removed.filter((fn) => !renamedBeforeIds.has(fn.id));
 
-  return { added, removed, modified, addedEdges, removedEdges };
+  // Compare edges through the rename map, so `helper → newHelper` doesn't
+  // make every edge touching it look added+removed.
+  const idMap = new Map(renamed.map((r) => [r.before.id, r.after.id]));
+  const mapKey = (e: Edge) =>
+    `${idMap.get(e.fromId) ?? e.fromId} -> ${idMap.get(e.toId) ?? e.toId}`;
+  const baseKeys = new Set([...base.edges.values()].map(mapKey));
+
+  const addedEdges = [...head.edges.entries()]
+    .filter(([key]) => !baseKeys.has(key))
+    .map(([, e]) => e);
+  const removedEdges = [...base.edges.values()].filter(
+    (e) => !head.edges.has(mapKey(e)),
+  );
+
+  return { added, removed, modified, renamed, addedEdges, removedEdges };
 }

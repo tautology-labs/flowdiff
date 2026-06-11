@@ -59,8 +59,9 @@ function renderFnBlock(
   head: Graph,
   ch: EdgeChanges,
   consumedFroms: Set<string>,
+  title?: string,
 ): void {
-  out.push(`${INDENT}${marker} ${bold(fn.name)} ${dim(`:${fn.line}`)}`);
+  out.push(`${INDENT}${marker} ${title ?? bold(fn.name)} ${dim(`:${fn.line}`)}`);
   consumedFroms.add(fn.id);
 
   const isRemoved = marker.includes("−");
@@ -116,39 +117,49 @@ export function renderDiff(
   out.push(`${bold("flowdiff")} ${baseLabel} ${dim("→")} ${headLabel}`);
   out.push("");
   out.push(
-    `${INDENT}${dim("functions")}   ${green(`+${diff.added.length}`)}  ${red(`−${diff.removed.length}`)}  ${yellow(`~${diff.modified.length}`)}` +
+    `${INDENT}${dim("functions")}   ${green(`+${diff.added.length}`)}  ${red(`−${diff.removed.length}`)}  ${yellow(`~${diff.modified.length}`)}  ${cyan(`→${diff.renamed.length}`)}` +
       `      ${dim("call edges")}  ${green(`+${diff.addedEdges.length}`)}  ${red(`−${diff.removedEdges.length}`)}`,
   );
   out.push("");
 
   const totalChanges =
-    diff.added.length + diff.removed.length + diff.modified.length;
+    diff.added.length +
+    diff.removed.length +
+    diff.modified.length +
+    diff.renamed.length;
   if (totalChanges === 0 && diff.addedEdges.length === 0 && diff.removedEdges.length === 0) {
     out.push(`${INDENT}${dim("no structural changes — the call graph is identical")}`);
     out.push("");
     return out.join("\n");
   }
 
-  // Group every changed function by file, preserving add/remove/modify kind.
-  type Entry = { fn: FnInfo; marker: string; order: number };
+  // Group every changed function by file, preserving the change kind.
+  type Entry = { fn: FnInfo; marker: string; order: number; title?: string };
   const byFile = new Map<string, Entry[]>();
-  const put = (fn: FnInfo, marker: string, order: number) => {
+  const put = (fn: FnInfo, marker: string, order: number, title?: string) => {
     const arr = byFile.get(fn.file);
-    const entry = { fn, marker, order };
+    const entry = { fn, marker, order, title };
     if (arr) arr.push(entry);
     else byFile.set(fn.file, [entry]);
   };
   for (const fn of diff.added) put(fn, green("+"), 0);
-  for (const m of diff.modified) put(m.after, yellow("~"), 1);
-  for (const fn of diff.removed) put(fn, red("−"), 2);
+  for (const r of diff.renamed) {
+    const from =
+      r.before.file === r.after.file
+        ? bold(r.before.name)
+        : `${bold(r.before.name)} ${dim(`(${r.before.file})`)}`;
+    put(r.after, cyan("→"), 1, `${from} ${cyan("→")} ${bold(r.after.name)}`);
+  }
+  for (const m of diff.modified) put(m.after, yellow("~"), 2);
+  for (const fn of diff.removed) put(fn, red("−"), 3);
 
   const consumed = new Set<string>();
   for (const file of [...byFile.keys()].sort()) {
     out.push(bold(file));
     const entries = byFile.get(file)!;
     entries.sort((a, b) => a.order - b.order || a.fn.line - b.fn.line);
-    for (const { fn, marker } of entries) {
-      renderFnBlock(out, fn, marker, base, head, ch, consumed);
+    for (const { fn, marker, title } of entries) {
+      renderFnBlock(out, fn, marker, base, head, ch, consumed, title);
     }
   }
 

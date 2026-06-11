@@ -11,6 +11,11 @@ export interface FnInfo {
   source: string;
   /** Hash of whitespace-normalized source — used to detect body changes. */
   bodyHash: string;
+  /**
+   * Like bodyHash, but with the function's own name masked out — two
+   * functions with equal renameHash are the same code under different names.
+   */
+  renameHash: string;
   /** Callee names appearing in the body (rightmost identifier of the call). */
   calls: string[];
   /** Parameter names — calls to these are callback invocations, not edges. */
@@ -53,18 +58,21 @@ export function extractFunctions(path: string, text: string): FnInfo[] {
     return names;
   };
 
+  const hash = (s: string) =>
+    createHash("sha1").update(s.replace(/\s+/g, " ")).digest("hex").slice(0, 12);
+
   const enter = (name: string, node: ts.Node): FnInfo => {
     const source = node.getText(sf);
+    const base = name.split(".").pop()!;
+    const blinded = source.replace(new RegExp(`\\b${base}\\b`, "g"), "·");
     const fn: FnInfo = {
       id: `${path}#${name}`,
       file: path,
       name,
       line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
       source,
-      bodyHash: createHash("sha1")
-        .update(source.replace(/\s+/g, " "))
-        .digest("hex")
-        .slice(0, 12),
+      bodyHash: hash(source),
+      renameHash: hash(blinded),
       calls: [],
       params: paramNames(node),
     };

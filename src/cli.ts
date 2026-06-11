@@ -117,6 +117,7 @@ function main(): void {
           added: diff.added.map(slim),
           removed: diff.removed.map(slim),
           modified: diff.modified.map((m) => slim(m.after)),
+          renamed: diff.renamed.map((r) => ({ from: slim(r.before), to: slim(r.after) })),
           addedEdges: diff.addedEdges.map((e) => ({ from: e.fromId, to: e.toId })),
           removedEdges: diff.removedEdges.map((e) => ({ from: e.fromId, to: e.toId })),
         },
