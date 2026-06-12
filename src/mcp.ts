@@ -20,20 +20,29 @@ import { diffLines } from "./linediff.js";
 
 const cwd = repoRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
 
-/** Commit graphs are immutable — cache by resolved sha. Worktree re-parses. */
+/**
+ * Commit graphs are immutable — cached by resolved sha forever. The worktree
+ * graph is cached briefly so multi-hop traversal doesn't re-parse the repo
+ * on every call, while edits still show up within seconds.
+ */
 const cache = new Map<string, Graph>();
+const WORKTREE_TTL_MS = 10_000;
+let worktreeGraph: { graph: Graph; at: number } | null = null;
 
 function graphAt(ref: string): Graph {
   const resolved = resolveRef(ref === "worktree" ? WORKTREE : ref, cwd);
   if (resolved !== WORKTREE) {
     const hit = cache.get(resolved);
     if (hit) return hit;
+  } else if (worktreeGraph && Date.now() - worktreeGraph.at < WORKTREE_TTL_MS) {
+    return worktreeGraph.graph;
   }
   const files = listSourceFiles(resolved, cwd)
     .map((path) => ({ path, text: readFileAt(resolved, path, cwd) }))
     .filter((f): f is { path: string; text: string } => f.text !== null);
   const graph = buildGraph(files);
   if (resolved !== WORKTREE) cache.set(resolved, graph);
+  else worktreeGraph = { graph, at: Date.now() };
   return graph;
 }
 
