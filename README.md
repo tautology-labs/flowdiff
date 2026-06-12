@@ -54,7 +54,7 @@ Run it from anywhere inside a git repo. `+` added, `−` removed, `~` body chang
 npm install && npm run build && npm link
 ```
 
-Node ≥ 18. The only runtime dependency is the TypeScript compiler, which is also the parser.
+Node ≥ 18. **Languages: TypeScript, JavaScript, and Java.** Two runtime dependencies, both pure JS, both parsers: the TypeScript compiler for TS/JS, and `java-parser` (Chevrotain) for Java — no native modules. Adding a language means writing one extractor file (~150 lines answering "what's a function, what does it call"); everything else — graph, diff, rename detection, TUI, MCP tools — is language-agnostic.
 
 ## MCP — give the graph to your agent
 
@@ -97,6 +97,6 @@ Name-based call resolution is a deliberate v0 heuristic: it's wrong in the ways 
 
 - Branch-level deltas (new `if`/`switch` arms inside a changed function)
 - Rename detection for *edited* renames (exact-body renames are detected; renamed-and-changed still shows as remove + add)
-- Other languages (the extractor is one ~100-line file; tree-sitter would generalize it)
+- More languages (Java landed as the second extractor; Python/Go would follow the same one-file pattern)
 - A GitHub Action that posts the flow summary as a PR comment
 - Differential tracing: run the test suite at both revisions under instrumentation and diff the *runtime* call patterns — catch the change that makes an input loop forever or allocate unboundedly

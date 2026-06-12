@@ -15,6 +15,7 @@
     "test": "tsc && node --test dist/*.test.js"
   },
   "dependencies": {
+    "java-parser": "^3.0.1",
     "typescript": "^5.5.0"
   },
   "devDependencies": {

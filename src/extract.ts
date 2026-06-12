@@ -22,6 +22,18 @@ export interface FnInfo {
   params: Set<string>;
 }
 
+/** Body + name-blinded hashes — shared by every language extractor. */
+export function fnHashes(
+  source: string,
+  name: string,
+): { bodyHash: string; renameHash: string } {
+  const hash = (s: string) =>
+    createHash("sha1").update(s.replace(/\s+/g, " ")).digest("hex").slice(0, 12);
+  const base = name.split(".").pop()!;
+  const blinded = source.replace(new RegExp(`\\b${base}\\b`, "g"), "·");
+  return { bodyHash: hash(source), renameHash: hash(blinded) };
+}
+
 function classPrefix(node: ts.Node): string {
   const parent = node.parent;
   if (
@@ -58,21 +70,15 @@ export function extractFunctions(path: string, text: string): FnInfo[] {
     return names;
   };
 
-  const hash = (s: string) =>
-    createHash("sha1").update(s.replace(/\s+/g, " ")).digest("hex").slice(0, 12);
-
   const enter = (name: string, node: ts.Node): FnInfo => {
     const source = node.getText(sf);
-    const base = name.split(".").pop()!;
-    const blinded = source.replace(new RegExp(`\\b${base}\\b`, "g"), "·");
     const fn: FnInfo = {
       id: `${path}#${name}`,
       file: path,
       name,
       line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
       source,
-      bodyHash: hash(source),
-      renameHash: hash(blinded),
+      ...fnHashes(source, name),
       calls: [],
       params: paramNames(node),
     };

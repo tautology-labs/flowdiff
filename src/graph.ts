@@ -1,4 +1,5 @@
-import { extractFunctions, type FnInfo } from "./extract.js";
+import type { FnInfo } from "./extract.js";
+import { extractAny } from "./extractors.js";
 
 export interface Edge {
   fromId: string;
@@ -31,6 +32,11 @@ const EXTERNAL_NOISE = new Set([
   "then", "catch", "finally", "resolve", "reject", "all",
   "toString", "valueOf", "toFixed", "stringify", "parse",
   "freeze", "assign", "from", "isArray", "now", "bind", "call", "apply",
+  // Java standard-library noise
+  "println", "printf", "append", "equals", "hashCode", "compareTo", "valueOf",
+  "size", "isEmpty", "length", "charAt", "substring", "of", "stream",
+  "collect", "iterator", "hasNext", "next", "put", "remove", "getMessage",
+  "builder", "build", "getClass", "format", "emptyList", "singletonList",
 ]);
 
 export function buildGraph(files: { path: string; text: string }[]): Graph {
@@ -44,7 +50,7 @@ export function buildGraph(files: { path: string; text: string }[]): Graph {
   };
 
   for (const file of files) {
-    for (const fn of extractFunctions(file.path, file.text)) {
+    for (const fn of extractAny(file.path, file.text)) {
       let id = fn.id;
       for (let n = 2; fns.has(id); n++) id = `${fn.id}#${n}`;
       fn.id = id;
