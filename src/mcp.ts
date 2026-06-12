@@ -17,8 +17,14 @@ import {
 } from "./graph.js";
 import type { FnInfo } from "./extract.js";
 import { diffLines } from "./linediff.js";
+import { discoverRoots } from "./roots.js";
+import { loadRootsGraph } from "./load.js";
 
-const cwd = repoRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+const startDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+const cwd = repoRoot(startDir);
+// Locally-linked sibling services are part of the graph, so an agent can
+// follow a contract across service boundaries instead of hitting a dead-end.
+const roots = discoverRoots(cwd);
 
 /**
  * Commit graphs are immutable — cached by resolved sha forever. The worktree
@@ -37,14 +43,20 @@ function graphAt(ref: string): Graph {
   } else if (worktreeGraph && Date.now() - worktreeGraph.at < WORKTREE_TTL_MS) {
     return worktreeGraph.graph;
   }
+  // The worktree graph spans all linked roots; commit graphs stay single-repo
+  // (cross-repo history with independent timelines is out of scope).
+  if (resolved === WORKTREE) {
+    const graph = loadRootsGraph(roots);
+    worktreeGraph = { graph, at: Date.now() };
+    return graph;
+  }
   const paths = listSourceFiles(resolved, cwd);
   const texts = readFilesAt(resolved, paths, cwd);
   const files = paths
     .map((path) => ({ path, text: texts.get(path) ?? null }))
     .filter((f): f is { path: string; text: string } => f.text !== null);
   const graph = buildGraph(files);
-  if (resolved !== WORKTREE) cache.set(resolved, graph);
-  else worktreeGraph = { graph, at: Date.now() };
+  cache.set(resolved, graph);
   return graph;
 }
 
@@ -78,7 +90,7 @@ const TOOLS = [
   {
     name: "function_info",
     description:
-      "One function's source plus its graph neighborhood: callers (who reaches it), callees (where it goes in-repo), and external calls (imports/stdlib). Use repeatedly to walk a call stack without reading whole files.",
+      "One function's source plus its graph neighborhood: callers (who reaches it), callees (where it goes), and external calls. The graph spans locally-linked sibling services, so callers/callees cross service boundaries — use this to find every consumer of a shared contract before changing it, then walk the call stack hop by hop without reading whole files.",
     inputSchema: {
       type: "object",
       properties: {

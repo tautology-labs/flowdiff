@@ -3,6 +3,7 @@ import { listSourceFiles, readFilesAt, repoRoot, resolveRef, WORKTREE } from "./
 import { buildGraph, diffGraphs, diffJson, findFn, type Graph } from "./graph.js";
 import { renderDiff, renderFnDiff } from "./render.js";
 import { runTui } from "./tui.js";
+import { discoverRoots } from "./roots.js";
 
 const HELP = `flowdiff — call-graph diffs for code review
 
@@ -12,6 +13,7 @@ Usage:
   flowdiff <base> <head>       compare two revisions
   flowdiff <base>..<head>      same, range syntax
   flowdiff fn <name> [revs]    show one function's before/after diff
+  flowdiff roots               list this repo's locally-linked sibling services
 
 Flags:
   -i        interactive mode — navigate the graph, expand diffs, e to edit
@@ -57,6 +59,21 @@ function main(): void {
   } catch {
     process.stderr.write("flowdiff: not inside a git repository\n");
     process.exit(1);
+  }
+
+  if (args[0] === "roots") {
+    const roots = discoverRoots(cwd);
+    if (roots.length === 1) {
+      process.stdout.write(
+        `${roots[0].name}  ${roots[0].dir}\n(no locally-linked sibling services found)\n`,
+      );
+    } else {
+      for (const r of roots) process.stdout.write(`${r.name}\t${r.dir}\n`);
+      process.stdout.write(
+        `\n${roots.length} roots — the flowdiff MCP traverses calls across all of them.\n`,
+      );
+    }
+    return;
   }
 
   const fnMode = args[0] === "fn";

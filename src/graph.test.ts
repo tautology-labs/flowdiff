@@ -96,6 +96,23 @@ test("trivial stub bodies never count as renames", () => {
   assert.deepEqual(d.removed.map((f) => f.name), ["gone"]);
 });
 
+test("calls resolve across roots in a unified multi-root graph", () => {
+  // What loadRootsGraph produces: root-prefixed paths from two services.
+  const g = buildGraph([
+    file(
+      "app/src/invoice.js",
+      `import { toCents } from "@acme/money";\nexport function invoiceTotal(x) { return toCents(x); }`,
+    ),
+    file("money/src/index.js", `export function toCents(a) { return Math.round(a * 100); }`),
+  ]);
+  // The cross-service call is a real edge, not an external dead-end.
+  assert.ok(g.edges.has("app/src/invoice.js#invoiceTotal -> money/src/index.js#toCents"));
+  assert.ok(![...g.edges.keys()].some((k) => k.includes("ext:toCents")));
+  // And the library function knows its consumer lives in another service.
+  const callers = g.callersOf.get("money/src/index.js#toCents") ?? [];
+  assert.equal(callers[0]?.fromId, "app/src/invoice.js#invoiceTotal");
+});
+
 test("findFn matches bare names, method basenames, and file#name suffixes", () => {
   const g = buildGraph([
     file("src/lambda/handler.ts", `export function getSecrets() {}`),

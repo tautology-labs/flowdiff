@@ -75,6 +75,10 @@ claude mcp add flowdiff -- node /absolute/path/to/flowdiff/dist/mcp.js
 
 "Explain this unfamiliar repo" becomes: `find_functions(entry_points_only)` → `function_info` hop by hop — never reading a file that isn't on the path. "Review this change" becomes: `flow_diff` → `function_diff` on whatever looks scary. The server is hand-rolled newline-delimited JSON-RPC over stdio — still zero dependencies. Commit graphs are cached; the working tree is re-parsed per call so the agent always sees your latest edit.
 
+### Across services
+
+The working-tree graph spans **locally-linked sibling services**, not just one repo. When you have several services checked out side by side and linked (a `file:`/`workspace:` dependency, or an `npm link` / `file:` install that leaves a symlink in `node_modules`), `function_info` resolves callers and callees *across* the service boundary. So before you change a shared contract, one `function_info` on it lists every consumer in every linked service — the case where reading files one at a time loses track and updates 3 of 5 callers. Run `flowdiff roots` to see what's stitched together. Registry dependencies are never followed, so this doesn't drag in `node_modules`.
+
 ```sh
 npm test   # 20 unit tests, node:test, no test framework
 ```
