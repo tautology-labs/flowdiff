@@ -76,8 +76,18 @@ Node ≥ 18. **Languages: TypeScript, JavaScript, Java, and Python — including
 The same graph, served as tools. Frontier models lose the thread following logic across a call stack because they read *files* while a call stack is a *graph* — these tools let an agent traverse function-by-function instead:
 
 ```sh
+# Claude Code
 claude mcp add flowdiff -- node /absolute/path/to/flowdiff/dist/mcp.js
 ```
+
+```toml
+# Codex (~/.codex/config.toml — key names may shift across versions, check their docs)
+[mcp_servers.flowdiff]
+command = "node"
+args = ["/absolute/path/to/flowdiff/dist/mcp.js"]
+```
+
+MCP is an open protocol, so any MCP client works the same way — Cursor, Windsurf, your own agent: point it at `node dist/mcp.js` over stdio. The server reads the repo it's launched in (or `CLAUDE_PROJECT_DIR` when set).
 
 | tool | what the agent gets |
 |---|---|
