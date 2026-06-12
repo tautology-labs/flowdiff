@@ -56,6 +56,27 @@ npm install && npm run build && npm link
 
 Node ≥ 18. The only runtime dependency is the TypeScript compiler, which is also the parser.
 
+## MCP — give the graph to your agent
+
+The same graph, served as tools. Frontier models lose the thread following logic across a call stack because they read *files* while a call stack is a *graph* — these tools let an agent traverse function-by-function instead:
+
+```sh
+claude mcp add flowdiff -- node /absolute/path/to/flowdiff/dist/mcp.js
+```
+
+| tool | what the agent gets |
+|---|---|
+| `find_functions` | search by name; `entry_points_only` lists where execution starts |
+| `function_info` | one function's source + callers + callees + external calls |
+| `flow_diff` | the structural delta between two revisions |
+| `function_diff` | one function's before/after line diff |
+
+"Explain this unfamiliar repo" becomes: `find_functions(entry_points_only)` → `function_info` hop by hop — never reading a file that isn't on the path. "Review this change" becomes: `flow_diff` → `function_diff` on whatever looks scary. The server is hand-rolled newline-delimited JSON-RPC over stdio — still zero dependencies. Commit graphs are cached; the working tree is re-parsed per call so the agent always sees your latest edit.
+
+```sh
+npm test   # 20 unit tests, node:test, no test framework
+```
+
 ## How it works
 
 1. Lists `.ts`/`.tsx`/`.js`/`.jsx` files at both revisions (`git ls-tree` / working tree).
