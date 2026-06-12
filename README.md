@@ -54,7 +54,7 @@ Run it from anywhere inside a git repo. `+` added, `−` removed, `~` body chang
 npm install && npm run build && npm link
 ```
 
-Node ≥ 18. **Languages: TypeScript, JavaScript, and Java.** Two runtime dependencies, both pure JS, both parsers: the TypeScript compiler for TS/JS, and `java-parser` (Chevrotain) for Java — no native modules. Adding a language means writing one extractor file (~150 lines answering "what's a function, what does it call"); everything else — graph, diff, rename detection, TUI, MCP tools — is language-agnostic.
+Node ≥ 18. **Languages: TypeScript, JavaScript, Java, and Python.** Two runtime dependencies, both pure JS, both parsers: the TypeScript compiler for TS/JS, and `java-parser` (Chevrotain) for Java; the Python extractor is hand-rolled (Python's `def`/indent structure makes that honest — strings and comments are blanked, brackets tracked, scopes close on dedent) with tree-sitter-via-WASM as the upgrade path if it needs to be production-grade. Adding a language means writing one extractor file answering "what's a function, what does it call"; everything else — graph, diff, rename detection, TUI, MCP tools — is language-agnostic. Python caveat: dynamic dispatch (`getattr`, exec, decorators that rewire) is invisible to any static graph, and untyped attribute calls make name-based resolution noisier than in TS/Java.
 
 ## MCP — give the graph to your agent
 

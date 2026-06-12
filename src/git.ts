@@ -23,9 +23,9 @@ export function resolveRef(ref: string, cwd: string): string {
   return git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd).trim();
 }
 
-const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|java)$/;
+const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|java|py)$/;
 const SKIP_RE =
-  /(^|\/)(node_modules|dist|build|out|coverage|\.next|vendor|cdk\.out|\.serverless|__generated__|target|\.gradle|generated-sources)(\/|$)|\.d\.ts$|\.min\.js$/;
+  /(^|\/)(node_modules|dist|build|out|coverage|\.next|vendor|cdk\.out|\.serverless|__generated__|target|\.gradle|generated-sources|__pycache__|\.venv|venv|\.tox|site-packages|\.eggs)(\/|$)|\.d\.ts$|\.min\.js$/;
 
 export function isSourcePath(path: string): boolean {
   return SOURCE_RE.test(path) && !SKIP_RE.test(path);

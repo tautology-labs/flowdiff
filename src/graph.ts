@@ -37,6 +37,13 @@ const EXTERNAL_NOISE = new Set([
   "size", "isEmpty", "length", "charAt", "substring", "of", "stream",
   "collect", "iterator", "hasNext", "next", "put", "remove", "getMessage",
   "builder", "build", "getClass", "format", "emptyList", "singletonList",
+  // Python builtin/stdlib noise
+  "len", "range", "enumerate", "zip", "isinstance", "issubclass", "getattr",
+  "setattr", "hasattr", "super", "int", "str", "float", "list", "dict",
+  "tuple", "type", "repr", "sorted", "reversed", "min", "max", "sum", "abs",
+  "open", "iter", "items", "update", "copy", "deepcopy", "strip", "lstrip",
+  "rstrip", "lower", "upper", "encode", "decode", "dumps", "loads", "info",
+  "warning", "exception", "extend", "insert",
 ]);
 
 export function buildGraph(files: { path: string; text: string }[]): Graph {
