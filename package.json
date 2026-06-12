@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "tsc && node --test dist/*.test.js"
   },
   "dependencies": {
     "typescript": "^5.5.0"

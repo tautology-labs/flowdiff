@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 import { listSourceFiles, readFileAt, repoRoot, resolveRef, WORKTREE } from "./git.js";
-import { buildGraph, diffGraphs, type Graph } from "./graph.js";
+import { buildGraph, diffGraphs, diffJson, findFn, type Graph } from "./graph.js";
 import { renderDiff, renderFnDiff } from "./render.js";
 import { runTui } from "./tui.js";
-import type { FnInfo } from "./extract.js";
 
 const HELP = `flowdiff — call-graph diffs for code review
 
@@ -37,19 +36,6 @@ function parseRevs(args: string[]): { base: string; head: string } {
     return { base, head: head ?? WORKTREE };
   }
   return { base: args[0] ?? "HEAD", head: args[1] ?? WORKTREE };
-}
-
-function findFn(graph: Graph, name: string): FnInfo[] {
-  const hits: FnInfo[] = [];
-  for (const fn of graph.fns.values()) {
-    // `name#fn` queries match by id suffix, so any unique path tail works:
-    // "handler.ts#getSecrets" or "src/lambda/handler.ts#getSecrets".
-    const match = name.includes("#")
-      ? fn.id === name || fn.id.endsWith("/" + name)
-      : fn.name === name || fn.name.split(".").pop() === name;
-    if (match) hits.push(fn);
-  }
-  return hits;
 }
 
 function main(): void {
@@ -134,22 +120,8 @@ function main(): void {
   const diff = diffGraphs(baseGraph, headGraph);
 
   if (json) {
-    const slim = (fn: FnInfo) => ({ id: fn.id, file: fn.file, name: fn.name, line: fn.line });
     process.stdout.write(
-      JSON.stringify(
-        {
-          base: label(base),
-          head: label(head),
-          added: diff.added.map(slim),
-          removed: diff.removed.map(slim),
-          modified: diff.modified.map((m) => slim(m.after)),
-          renamed: diff.renamed.map((r) => ({ from: slim(r.before), to: slim(r.after) })),
-          addedEdges: diff.addedEdges.map((e) => ({ from: e.fromId, to: e.toId })),
-          removedEdges: diff.removedEdges.map((e) => ({ from: e.fromId, to: e.toId })),
-        },
-        null,
-        2,
-      ) + "\n",
+      JSON.stringify(diffJson(diff, label(base), label(head)), null, 2) + "\n",
     );
     return;
   }

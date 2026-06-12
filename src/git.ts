@@ -27,14 +27,16 @@ const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const SKIP_RE =
   /(^|\/)(node_modules|dist|build|out|coverage|\.next|vendor|cdk\.out|\.serverless|__generated__)(\/|$)|\.d\.ts$|\.min\.js$/;
 
+export function isSourcePath(path: string): boolean {
+  return SOURCE_RE.test(path) && !SKIP_RE.test(path);
+}
+
 export function listSourceFiles(ref: string, cwd: string): string[] {
   const out =
     ref === WORKTREE
       ? git(["ls-files", "--cached", "--others", "--exclude-standard"], cwd)
       : git(["ls-tree", "-r", "--name-only", ref], cwd);
-  return out
-    .split("\n")
-    .filter((f) => f && SOURCE_RE.test(f) && !SKIP_RE.test(f));
+  return out.split("\n").filter((f) => f && isSourcePath(f));
 }
 
 export function readFileAt(ref: string, path: string, cwd: string): string | null {

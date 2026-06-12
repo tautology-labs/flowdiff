@@ -103,10 +103,20 @@ export interface GraphDiff {
  * Only unambiguous 1:1 hash matches count — two identical helpers renamed in
  * one change stay as add/remove rather than guessing which became which.
  */
+/**
+ * Bodies shorter than this (whitespace-normalized) are too trivial to claim
+ * "same code, new name" — an empty stub matches every other empty stub.
+ */
+const MIN_RENAME_BODY = 30;
+
 function detectRenames(
   added: FnInfo[],
   removed: FnInfo[],
 ): { before: FnInfo; after: FnInfo }[] {
+  const substantial = (fn: FnInfo) =>
+    fn.source.replace(/\s+/g, " ").length >= MIN_RENAME_BODY;
+  added = added.filter(substantial);
+  removed = removed.filter(substantial);
   const group = (fns: FnInfo[]) => {
     const m = new Map<string, FnInfo[]>();
     for (const fn of fns) {
@@ -127,6 +137,32 @@ function detectRenames(
     }
   }
   return renamed;
+}
+
+/** Resolve a fn query: bare name, `Class.method`, full id, or `file#name` suffix. */
+export function findFn(graph: Graph, name: string): FnInfo[] {
+  const hits: FnInfo[] = [];
+  for (const fn of graph.fns.values()) {
+    const match = name.includes("#")
+      ? fn.id === name || fn.id.endsWith("/" + name)
+      : fn.name === name || fn.name.split(".").pop() === name;
+    if (match) hits.push(fn);
+  }
+  return hits;
+}
+
+export function diffJson(diff: GraphDiff, baseLabel: string, headLabel: string) {
+  const slim = (fn: FnInfo) => ({ id: fn.id, file: fn.file, name: fn.name, line: fn.line });
+  return {
+    base: baseLabel,
+    head: headLabel,
+    added: diff.added.map(slim),
+    removed: diff.removed.map(slim),
+    modified: diff.modified.map((m) => slim(m.after)),
+    renamed: diff.renamed.map((r) => ({ from: slim(r.before), to: slim(r.after) })),
+    addedEdges: diff.addedEdges.map((e) => ({ from: e.fromId, to: e.toId })),
+    removedEdges: diff.removedEdges.map((e) => ({ from: e.fromId, to: e.toId })),
+  };
 }
 
 export function diffGraphs(base: Graph, head: Graph): GraphDiff {
