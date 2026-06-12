@@ -58,6 +58,8 @@ Node ≥ 18. The only runtime dependency is the TypeScript compiler, which is al
 
 ## MCP — give the graph to your agent
 
+*GraphQL, for code, for those who read code one hop at a time.*
+
 The same graph, served as tools. Frontier models lose the thread following logic across a call stack because they read *files* while a call stack is a *graph* — these tools let an agent traverse function-by-function instead:
 
 ```sh
