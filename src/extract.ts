@@ -96,6 +96,15 @@ export function extractFunctions(path: string, text: string): FnInfo[] {
     } else if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) {
       enter(classPrefix(node) + node.name.text, node);
       entered = true;
+    } else if (ts.isConstructorDeclaration(node)) {
+      enter(classPrefix(node) + "constructor", node);
+      entered = true;
+    } else if (
+      (ts.isGetAccessor(node) || ts.isSetAccessor(node)) &&
+      ts.isIdentifier(node.name)
+    ) {
+      enter(classPrefix(node) + node.name.text, node);
+      entered = true;
     } else if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&

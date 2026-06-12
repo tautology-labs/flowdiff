@@ -58,6 +58,26 @@ test("body change alters both hashes", () => {
   assert.notEqual(before.renameHash, after.renameHash);
 });
 
+test("constructors and accessors are functions too", () => {
+  const fns = extractFunctions(
+    "a.ts",
+    `
+class Agent {
+  constructor(opts: object) {
+    this.wire(opts);
+  }
+  get state() { return compute(); }
+}
+`,
+  );
+  const ctor = fns.find((f) => f.name === "Agent.constructor");
+  assert.ok(ctor, "constructor extracted");
+  assert.deepEqual(ctor!.calls, ["wire"]);
+  const getter = fns.find((f) => f.name === "Agent.state");
+  assert.ok(getter, "getter extracted");
+  assert.deepEqual(getter!.calls, ["compute"]);
+});
+
 test("extracts both same-named functions (dedupe happens in buildGraph)", () => {
   const fns = extractFunctions(
     "a.ts",
