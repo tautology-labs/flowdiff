@@ -139,6 +139,50 @@ function detectRenames(
   return renamed;
 }
 
+/**
+ * BFS from `fromId` and return the call path to every member of `targets`
+ * encountered. Direction "down" walks callees (code fromId executes);
+ * "up" walks callers (code that leads into fromId). Paths are id arrays
+ * starting at fromId. Used to intersect a diff's changed set with the
+ * subgraph that can actually touch a symptom.
+ */
+export function pathsToTargets(
+  graph: Graph,
+  fromId: string,
+  targets: Set<string>,
+  direction: "down" | "up",
+  maxDepth = 15,
+): Map<string, string[]> {
+  const parent = new Map<string, string | null>([[fromId, null]]);
+  const found = new Map<string, string[]>();
+  let frontier = [fromId];
+
+  const neighbors = (id: string): string[] =>
+    direction === "down"
+      ? [...graph.edges.values()]
+          .filter((e) => e.fromId === id && !e.external)
+          .map((e) => e.toId)
+      : (graph.callersOf.get(id) ?? []).map((e) => e.fromId);
+
+  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const n of neighbors(id)) {
+        if (parent.has(n)) continue;
+        parent.set(n, id);
+        if (targets.has(n)) {
+          const path = [n];
+          for (let p = parent.get(n); p != null; p = parent.get(p)) path.push(p);
+          found.set(n, path.reverse());
+        }
+        next.push(n);
+      }
+    }
+    frontier = next;
+  }
+  return found;
+}
+
 /** Resolve a fn query: bare name, `Class.method`, full id, or `file#name` suffix. */
 export function findFn(graph: Graph, name: string): FnInfo[] {
   const hits: FnInfo[] = [];

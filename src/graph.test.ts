@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildGraph, diffGraphs, findFn } from "./graph.js";
+import { buildGraph, diffGraphs, findFn, pathsToTargets } from "./graph.js";
 
 const file = (path: string, text: string) => ({ path, text });
 
@@ -94,6 +94,31 @@ test("trivial stub bodies never count as renames", () => {
   assert.equal(d.renamed.length, 0);
   assert.deepEqual(d.added.map((f) => f.name), ["fresh"]);
   assert.deepEqual(d.removed.map((f) => f.name), ["gone"]);
+});
+
+test("pathsToTargets finds call paths down to changed functions and up to callers", () => {
+  const g = buildGraph([
+    file(
+      "a.ts",
+      `function endpoint() { service(); }
+function service() { helperA(); helperB(); }
+function helperA() { deep(); }
+function helperB() {}
+function deep() {}
+function unrelated() { helperB(); }`,
+    ),
+  ]);
+  const down = pathsToTargets(g, "a.ts#endpoint", new Set(["a.ts#deep", "a.ts#unrelated"]), "down");
+  assert.deepEqual(down.get("a.ts#deep"), [
+    "a.ts#endpoint",
+    "a.ts#service",
+    "a.ts#helperA",
+    "a.ts#deep",
+  ]);
+  assert.equal(down.has("a.ts#unrelated"), false, "unreachable change excluded");
+
+  const up = pathsToTargets(g, "a.ts#helperB", new Set(["a.ts#endpoint"]), "up");
+  assert.deepEqual(up.get("a.ts#endpoint"), ["a.ts#helperB", "a.ts#service", "a.ts#endpoint"]);
 });
 
 test("calls resolve across roots in a unified multi-root graph", () => {

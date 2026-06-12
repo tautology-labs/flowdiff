@@ -13,6 +13,7 @@ import {
   diffGraphs,
   diffJson,
   findFn,
+  pathsToTargets,
   type Graph,
 } from "./graph.js";
 import type { FnInfo } from "./extract.js";
@@ -113,6 +114,23 @@ const TOOLS = [
     },
   },
   {
+    name: "blast_radius",
+    description:
+      "Incident root-cause helper. Given a function where a symptom shows (an erroring endpoint, a wrong output) and a revision range (last-good → deployed), intersects the diff with the call graph: returns only the changed functions the symptom can actually touch — downstream (code the symptom executes) and upstream (code that influences calls into it) — each with the call path connecting it. Start here when a deployment broke something.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        symptom: {
+          type: "string",
+          description: "Function where the bad behavior is observed (name, Class.method, or file#name id).",
+        },
+        base: { type: "string", description: "Last-good ref (default HEAD)." },
+        head: { type: "string", description: "Deployed/suspect ref, or 'worktree' (default)." },
+      },
+      required: ["symptom"],
+    },
+  },
+  {
     name: "function_diff",
     description: "One function's before/after line diff between two revisions.",
     inputSchema: {
@@ -175,6 +193,38 @@ function callTool(name: string, args: Args): unknown {
   if (name === "flow_diff") {
     const diff = diffGraphs(graphAt(base), graphAt(head));
     return diffJson(diff, base, head);
+  }
+
+  if (name === "blast_radius") {
+    const baseGraph = graphAt(base);
+    const headGraph = graphAt(head);
+    const diff = diffGraphs(baseGraph, headGraph);
+    const symptom = resolveOne(headGraph, args.symptom as string);
+
+    const changedKind = new Map<string, string>();
+    for (const fn of diff.added) changedKind.set(fn.id, "added");
+    for (const m of diff.modified) changedKind.set(m.after.id, "modified");
+    for (const r of diff.renamed) changedKind.set(r.after.id, "renamed");
+    const targets = new Set(changedKind.keys());
+
+    const describe = (paths: Map<string, string[]>) =>
+      [...paths.entries()].map(([id, path]) => ({
+        function: slim(headGraph.fns.get(id)!),
+        change: changedKind.get(id),
+        path: path.map((p) => p.split("#").pop()),
+      }));
+
+    return {
+      symptom: slim(symptom),
+      range: { base, head },
+      changed_functions_total: targets.size,
+      downstream: describe(pathsToTargets(headGraph, symptom.id, targets, "down")),
+      upstream: describe(pathsToTargets(headGraph, symptom.id, targets, "up")),
+      removed_in_range: diff.removed.map((fn) => ({
+        ...slim(fn),
+        note: "no longer exists at head — check callers that relied on it",
+      })),
+    };
   }
 
   if (name === "function_diff") {
