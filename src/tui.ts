@@ -24,9 +24,9 @@ const HELP_LINES = [
   bold("  keys"),
   "",
   `  ${cyan("↑/↓ j/k")}   move between functions`,
-  `  ${cyan("enter")}     expand/collapse the function's diff (or jump, if a target is picked)`,
-  `  ${cyan("tab")}       pick a caller/callee to jump to (shown in the footer)`,
-  `  ${cyan("e")}         open $EDITOR at this function, refresh on return`,
+  `  ${cyan("enter")}     expand/collapse the function's diff`,
+  `  ${cyan("→ / l")}     browse this function's callers and calls (scroll, enter jumps, ← back)`,
+  `  ${cyan("e")}         open $EDITOR here — works on any caller in the refs browser too`,
   `  ${cyan("r")}         re-scan the working tree`,
   `  ${cyan("?")}         toggle this help`,
   `  ${cyan("q")}         quit`,
@@ -43,7 +43,9 @@ export function runTui(opts: TuiOptions): void {
   let entries: ChangeEntry[] = changedEntries(diff);
   let selected = 0;
   let scroll = 0;
-  let jumpIdx = -1;
+  let refsMode = false;
+  let refIdx = 0;
+  let selRefLine = 0;
   let showHelp = false;
   let status = "";
   const expanded = new Set<string>();
@@ -53,18 +55,33 @@ export function runTui(opts: TuiOptions): void {
   const currentGraph = (e: ChangeEntry): Graph =>
     e.after ? headGraph : opts.baseGraph;
 
-  /** In-repo callers and callees of this card that have cards of their own. */
-  const jumpTargets = (e: ChangeEntry): { id: string; name: string }[] => {
+  interface Ref {
+    id: string;
+    name: string;
+    file: string;
+    line: number;
+    kind: "caller" | "call";
+    hasCard: boolean;
+  }
+
+  /** Every caller and in-repo callee of this card, scrollable in refs mode. */
+  const refsFor = (e: ChangeEntry): Ref[] => {
     const g = currentGraph(e);
-    const ids: string[] = [];
-    for (const edge of g.callersOf.get(e.fn.id) ?? []) ids.push(edge.fromId);
-    for (const edge of g.edges.values()) {
-      if (edge.fromId === e.fn.id && !edge.external) ids.push(edge.toId);
-    }
     const cards = new Set(entries.map((en) => en.fn.id));
-    return [...new Set(ids)]
-      .filter((id) => cards.has(id) && id !== e.fn.id)
-      .map((id) => ({ id, name: id.split("#")[1] ?? id }));
+    const seen = new Set<string>();
+    const refs: Ref[] = [];
+    const add = (id: string, kind: "caller" | "call") => {
+      if (id === e.fn.id || seen.has(`${kind}:${id}`)) return;
+      seen.add(`${kind}:${id}`);
+      const fn = g.fns.get(id);
+      if (!fn) return;
+      refs.push({ id, name: fn.name, file: fn.file, line: fn.line, kind, hasCard: cards.has(id) });
+    };
+    for (const edge of g.callersOf.get(e.fn.id) ?? []) add(edge.fromId, "caller");
+    for (const edge of g.edges.values()) {
+      if (edge.fromId === e.fn.id && !edge.external) add(edge.toId, "call");
+    }
+    return refs;
   };
 
   const expandedDiff = (e: ChangeEntry): string[] => {
@@ -110,6 +127,29 @@ export function runTui(opts: TuiOptions): void {
         lastFile = e.fn.file;
       }
       headerAt[i] = lines.length;
+      if (i === selected && refsMode) {
+        // Refs browser: callers and calls as a scrollable vertical list.
+        lines.push(`${cyan("▸")} ${e.marker} ${e.title ?? bold(e.fn.name)} ${dim(`:${e.fn.line}`)}`);
+        const refs = refsFor(e);
+        let lastKind = "";
+        refs.forEach((ref, ri) => {
+          if (ref.kind !== lastKind) {
+            lines.push(
+              `      ${dim(ref.kind === "caller" ? `callers (${refs.filter((r) => r.kind === "caller").length})` : `calls (${refs.filter((r) => r.kind === "call").length})`)}`,
+            );
+            lastKind = ref.kind;
+          }
+          const cursor = ri === refIdx ? cyan("▸ ") : "  ";
+          const card = ref.hasCard ? "" : dim("  (unchanged)");
+          if (ri === refIdx) selRefLine = lines.length;
+          lines.push(
+            `      ${cursor}${cyan(ref.name)} ${dim(`:${ref.line}`)} ${dim(`(${ref.file})`)}${card}`,
+          );
+        });
+        if (refs.length === 0) lines.push(dim("      no in-repo callers or calls"));
+        lines.push("");
+        return;
+      }
       const block: string[] = [];
       renderFnBlock(block, e.fn, e.marker, opts.baseGraph, headGraph, ch, new Set(), e.title);
       block[0] = (i === selected ? cyan("▸ ") : "  ") + block[0].slice(2);
@@ -125,21 +165,16 @@ export function runTui(opts: TuiOptions): void {
     const rows = out.rows || 40;
     const { lines, headerAt } = buildLines();
     const view = rows - 1;
-    const target = headerAt[selected] ?? 0;
+    const target = refsMode ? selRefLine : (headerAt[selected] ?? 0);
     if (target < scroll) scroll = Math.max(0, target - 2);
     if (target >= scroll + view - 4) scroll = target - view + 5;
     scroll = Math.max(0, Math.min(scroll, Math.max(0, lines.length - view)));
 
-    const e = entries[selected];
-    const targets = e ? jumpTargets(e) : [];
-    const jump =
-      jumpIdx >= 0 && targets[jumpIdx]
-        ? `${cyan("jump → " + targets[jumpIdx].name)} ${dim("(enter)")}  `
-        : "";
     const footer =
-      jump +
       status +
-      dim("↑↓ move · enter expand · tab jump · e edit · r refresh · ? help · q quit");
+      (refsMode
+        ? dim("↑↓ scroll refs · enter jump to card · e edit · ← back · q quit")
+        : dim("↑↓ move · → callers/calls · enter expand · e edit · r refresh · ? help · q quit"));
 
     out.write(
       "\x1b[H\x1b[2J" +
@@ -156,16 +191,16 @@ export function runTui(opts: TuiOptions): void {
     entries = changedEntries(diff);
     const idx = entries.findIndex((e) => e.fn.id === keep);
     selected = idx >= 0 ? idx : Math.min(selected, Math.max(0, entries.length - 1));
-    jumpIdx = -1;
+    refsMode = false;
+    refIdx = 0;
     status = "";
   };
 
-  const openEditor = (e: ChangeEntry): void => {
-    const fn = e.after ?? e.fn;
+  const openEditor = (file: string, line: number): void => {
     const editor = process.env.EDITOR || process.env.VISUAL || "vi";
     const arg = editor.includes("code")
-      ? `-g "${fn.file}:${fn.line}" --wait`
-      : `+${fn.line} "${fn.file}"`;
+      ? `-g "${file}:${line}" --wait`
+      : `+${line} "${file}"`;
     out.write("\x1b[?25h\x1b[?1049l");
     process.stdin.setRawMode(false);
     spawnSync(`${editor} ${arg}`, { shell: true, stdio: "inherit", cwd: opts.cwd });
@@ -191,30 +226,42 @@ export function runTui(opts: TuiOptions): void {
 
   process.stdin.on("data", (key: string) => {
     const e = entries[selected];
+    const refs = e && refsMode ? refsFor(e) : [];
     if (key === "q" || key === "\x03") quit();
-    else if (key === "\x1b[A" || key === "k") {
-      selected = Math.max(0, selected - 1);
-      jumpIdx = -1;
-    } else if (key === "\x1b[B" || key === "j") {
-      selected = Math.min(entries.length - 1, selected + 1);
-      jumpIdx = -1;
-    } else if (key === "\t" && e) {
-      const targets = jumpTargets(e);
-      jumpIdx = targets.length > 0 ? (jumpIdx + 1) % targets.length : -1;
-    } else if (key === "\r" && e) {
-      const targets = jumpTargets(e);
-      if (jumpIdx >= 0 && targets[jumpIdx]) {
-        const idx = entries.findIndex((en) => en.fn.id === targets[jumpIdx].id);
-        if (idx >= 0) selected = idx;
-        jumpIdx = -1;
-      } else if (expanded.has(e.fn.id)) expanded.delete(e.fn.id);
-      else expanded.add(e.fn.id);
-    } else if (key === " " && e) {
-      if (expanded.has(e.fn.id)) expanded.delete(e.fn.id);
-      else expanded.add(e.fn.id);
-    } else if (key === "e" && e) openEditor(e);
-    else if (key === "r") refresh();
-    else if (key === "?") showHelp = !showHelp;
+    else if (refsMode) {
+      if (key === "\x1b[A" || key === "k") refIdx = Math.max(0, refIdx - 1);
+      else if (key === "\x1b[B" || key === "j") refIdx = Math.min(refs.length - 1, refIdx + 1);
+      else if (key === "\x1b[D" || key === "h" || key === "\x1b") {
+        refsMode = false;
+        status = "";
+      } else if (key === "\r" && refs[refIdx]) {
+        const idx = entries.findIndex((en) => en.fn.id === refs[refIdx].id);
+        if (idx >= 0) {
+          selected = idx;
+          refsMode = false;
+          refIdx = 0;
+          status = "";
+        } else {
+          status = dim("unchanged in this diff — e opens it in your editor · ");
+        }
+      } else if (key === "e" && refs[refIdx]) {
+        openEditor(refs[refIdx].file, refs[refIdx].line);
+      }
+    } else {
+      if (key === "\x1b[A" || key === "k") selected = Math.max(0, selected - 1);
+      else if (key === "\x1b[B" || key === "j") selected = Math.min(entries.length - 1, selected + 1);
+      else if ((key === "\x1b[C" || key === "l") && e) {
+        refsMode = true;
+        refIdx = 0;
+      } else if ((key === "\r" || key === " ") && e) {
+        if (expanded.has(e.fn.id)) expanded.delete(e.fn.id);
+        else expanded.add(e.fn.id);
+      } else if (key === "e" && e) {
+        const fn = e.after ?? e.fn;
+        openEditor(fn.file, fn.line);
+      } else if (key === "r") refresh();
+      else if (key === "?") showHelp = !showHelp;
+    }
     render();
   });
 

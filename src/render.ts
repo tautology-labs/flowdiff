@@ -112,8 +112,15 @@ export function renderFnBlock(
   const isRemoved = marker.includes("−");
   const current = isRemoved ? base : head;
 
-  const row = (label: string, parts: string[]) =>
+  // Mega-caller functions (a public API can have 100+ callers) get a count
+  // instead of an unreadable wall; the TUI's refs browser shows the rest.
+  const MAX_REFS = 8;
+  const row = (label: string, parts: string[]) => {
+    if (parts.length > MAX_REFS) {
+      parts = [...parts.slice(0, MAX_REFS), dim(`+${parts.length - MAX_REFS} more`)];
+    }
     out.push(`${INDENT}${INDENT}${dim(label.padEnd(10))}${parts.join("  ")}`);
+  };
 
   // Callers: who reaches this function now (or did, if removed).
   const callers = current.callersOf.get(fn.id) ?? [];
