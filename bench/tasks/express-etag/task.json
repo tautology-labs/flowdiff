@@ -1,0 +1,9 @@
+{
+  "kind": "repo",
+  "repo": "https://github.com/expressjs/express",
+  "sha": "dae209ae6559c29cfca2a1f4414c51d89ea643d5",
+  "install": "npm install --no-audit --no-fund",
+  "bugPatch": "bug.patch",
+  "holdout": ["test/res.send.js", "test/utils.js"],
+  "gradeCmd": "npx mocha test/res.send.js test/utils.js --reporter min"
+}

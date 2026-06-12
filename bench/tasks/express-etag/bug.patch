@@ -1,0 +1,19 @@
+diff --git a/lib/utils.js b/lib/utils.js
+index 4f21e7ef..b343f454 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -137,12 +137,12 @@ exports.compileETag = function(val) {
+   switch (val) {
+     case true:
+     case 'weak':
+-      fn = exports.wetag;
++      fn = exports.etag;
+       break;
+     case false:
+       break;
+     case 'strong':
+-      fn = exports.etag;
++      fn = exports.wetag;
+       break;
+     default:
+       throw new TypeError('unknown value for etag function: ' + val);

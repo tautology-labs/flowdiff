@@ -14,10 +14,12 @@
 import { execSync, spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,12 +52,38 @@ for (const taskName of taskNames) {
   const taskDir = join(benchDir, "tasks", taskName);
   const prompt = readFileSync(join(taskDir, "task.md"), "utf8");
 
+  // Two task kinds: `repo/` fixture dirs, or task.json pointing at a real
+  // repo + sha with a bug.patch to plant and holdout test paths to withhold.
+  const specPath = join(taskDir, "task.json");
+  const spec = existsSync(specPath)
+    ? JSON.parse(readFileSync(specPath, "utf8"))
+    : null;
+  const cacheDir = spec ? join(benchDir, "cache", taskName) : null;
+  if (spec && !existsSync(cacheDir)) {
+    console.error(`▸ caching ${spec.repo} @ ${spec.sha.slice(0, 8)} (one-time)`);
+    execSync(`git clone --quiet ${spec.repo} ${cacheDir}`, { stdio: "ignore" });
+    execSync(`git checkout --quiet ${spec.sha}`, { cwd: cacheDir, stdio: "ignore" });
+    execSync(spec.install, { cwd: cacheDir, stdio: "ignore" });
+  }
+
   for (const cond of conditions) {
     const work = mkdtempSync(join(tmpdir(), `bench-${taskName}-${cond}-`));
     const proj = join(work, "repo");
-    cpSync(join(taskDir, "repo"), proj, { recursive: true });
+    if (spec) {
+      cpSync(cacheDir, proj, { recursive: true });
+      execSync(`git apply ${join(taskDir, spec.bugPatch)}`, {
+        cwd: proj,
+        stdio: "ignore",
+      });
+      for (const h of spec.holdout) rmSync(join(proj, h));
+      // Replace the clone's history with one innocent commit, so the planted
+      // bug and withheld tests aren't readable straight out of `git show`.
+      rmSync(join(proj, ".git"), { recursive: true, force: true });
+    } else {
+      cpSync(join(taskDir, "repo"), proj, { recursive: true });
+    }
     execSync(
-      "git init -qb main && git add -A && git -c user.name=bench -c user.email=bench@bench commit -qm task",
+      "git init -qb main && git add -A && git -c user.name=bench -c user.email=bench@bench commit -qm import",
       { cwd: proj, stdio: "ignore" },
     );
 
@@ -95,12 +123,22 @@ for (const taskName of taskNames) {
       // timeout or crash — grade anyway; an unfixed repo just fails
     }
 
-    cpSync(join(taskDir, "holdout.test.js"), join(proj, "holdout.test.js"));
-    const graded = spawnSync("node", ["--test", "holdout.test.js"], {
-      cwd: proj,
-      encoding: "utf8",
-      timeout: 60_000,
-    });
+    let graded;
+    if (spec) {
+      for (const h of spec.holdout) cpSync(join(cacheDir, h), join(proj, h));
+      graded = spawnSync("sh", ["-c", spec.gradeCmd], {
+        cwd: proj,
+        encoding: "utf8",
+        timeout: 300_000,
+      });
+    } else {
+      cpSync(join(taskDir, "holdout.test.js"), join(proj, "holdout.test.js"));
+      graded = spawnSync("node", ["--test", "holdout.test.js"], {
+        cwd: proj,
+        encoding: "utf8",
+        timeout: 60_000,
+      });
+    }
     const pass = graded.status === 0;
 
     results.push({
