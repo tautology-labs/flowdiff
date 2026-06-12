@@ -10,6 +10,7 @@ import { createInterface } from "node:readline";
 import { listSourceFiles, readFilesAt, repoRoot, resolveRef, WORKTREE } from "./git.js";
 import {
   buildGraph,
+  changedTargets,
   diffGraphs,
   diffJson,
   findFn,
@@ -233,10 +234,7 @@ function callTool(name: string, args: Args): unknown {
     const diff = diffGraphs(baseGraph, headGraph);
     const symptom = resolveOne(headGraph, args.symptom as string);
 
-    const changedKind = new Map<string, string>();
-    for (const fn of diff.added) changedKind.set(fn.id, "added");
-    for (const m of diff.modified) changedKind.set(m.after.id, "modified");
-    for (const r of diff.renamed) changedKind.set(r.after.id, "renamed");
+    const changedKind = changedTargets(diff);
     const targets = new Set(changedKind.keys());
 
     const describe = (paths: Map<string, string[]>) =>

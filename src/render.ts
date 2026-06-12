@@ -233,6 +233,61 @@ export function renderDiff(
   return out.join("\n");
 }
 
+const KIND_MARK: Record<string, string> = {
+  added: green("+"),
+  modified: yellow("~"),
+  renamed: cyan("→"),
+};
+
+export function renderBlast(
+  symptom: FnInfo,
+  headGraph: Graph,
+  changedKind: Map<string, string>,
+  down: Map<string, string[]>,
+  up: Map<string, string[]>,
+  removed: FnInfo[],
+  baseLabel: string,
+  headLabel: string,
+): string {
+  const out: string[] = [];
+  const pathStr = (path: string[]) =>
+    path.map((id) => cyan(shortName(id))).join(dim(" → "));
+  const section = (title: string, hint: string, paths: Map<string, string[]>) => {
+    out.push(`${INDENT}${bold(title)} ${dim(`— ${hint}`)}`);
+    if (paths.size === 0) {
+      out.push(`${INDENT}${INDENT}${dim("none")}`);
+    }
+    for (const [id, path] of paths) {
+      const fn = headGraph.fns.get(id);
+      const mark = KIND_MARK[changedKind.get(id) ?? ""] ?? " ";
+      out.push(
+        `${INDENT}${INDENT}${mark} ${bold(shortName(id))} ${dim(`(${fileOf(id)}:${fn?.line ?? "?"})`)}`,
+      );
+      out.push(`${INDENT}${INDENT}${INDENT}${pathStr(path)}`);
+    }
+    out.push("");
+  };
+
+  out.push("");
+  out.push(
+    `${bold("blast radius")} ${dim("·")} symptom ${cyan(symptom.name)} ${dim(`(${symptom.file}:${symptom.line})`)} ${dim("·")} ${baseLabel} ${dim("→")} ${headLabel}`,
+  );
+  out.push(
+    `${INDENT}${dim(`${changedKind.size} functions changed in range · ${down.size + up.size} can touch the symptom`)}`,
+  );
+  out.push("");
+  section("downstream", "code the symptom executes", down);
+  section("upstream", "code that leads into the symptom", up);
+  if (removed.length > 0) {
+    out.push(`${INDENT}${bold("removed in range")} ${dim("— check callers that relied on these")}`);
+    for (const fn of removed) {
+      out.push(`${INDENT}${INDENT}${red("−")} ${bold(fn.name)} ${dim(`(${fn.file}:${fn.line})`)}`);
+    }
+    out.push("");
+  }
+  return out.join("\n");
+}
+
 export function renderFnDiff(
   name: string,
   before: FnInfo | null,

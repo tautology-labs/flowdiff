@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 import { listSourceFiles, readFilesAt, repoRoot, resolveRef, WORKTREE } from "./git.js";
-import { buildGraph, diffGraphs, diffJson, findFn, type Graph } from "./graph.js";
-import { renderDiff, renderFnDiff } from "./render.js";
+import {
+  buildGraph,
+  changedTargets,
+  diffGraphs,
+  diffJson,
+  findFn,
+  pathsToTargets,
+  type Graph,
+} from "./graph.js";
+import { renderBlast, renderDiff, renderFnDiff } from "./render.js";
 import { runTui } from "./tui.js";
 import { discoverRoots } from "./roots.js";
 
@@ -13,6 +21,8 @@ Usage:
   flowdiff <base> <head>       compare two revisions
   flowdiff <base>..<head>      same, range syntax
   flowdiff fn <name> [revs]    show one function's before/after diff
+  flowdiff blast <name> [revs] incident mode: which changed functions can
+                               touch <name>? (symptom fn + deploy range)
   flowdiff roots               list this repo's locally-linked sibling services
   flowdiff completions zsh     print shell completions (add to ~/.zshrc:
                                eval "$(flowdiff completions zsh)")
@@ -49,12 +59,12 @@ _flowdiff() {
   case $state in
     first)
       local -a cmds
-      cmds=('fn:diff one function' 'roots:list linked sibling services' 'completions:print shell completions')
+      cmds=('fn:diff one function' 'blast:incident mode — changed functions that can touch a symptom' 'roots:list linked sibling services' 'completions:print shell completions')
       _describe -t commands 'flowdiff command' cmds
       __flowdiff_refs
       ;;
     rest)
-      if [[ \${words[2]} == fn && CURRENT -eq 3 ]]; then
+      if [[ (\${words[2]} == fn || \${words[2]} == blast) && CURRENT -eq 3 ]]; then
         __flowdiff_fns
       elif [[ \${words[2]} == completions ]]; then
         compadd zsh
@@ -144,12 +154,13 @@ function main(): void {
   }
 
   const fnMode = args[0] === "fn";
-  const fnName = fnMode ? args[1] : null;
-  if (fnMode && !fnName) {
-    process.stderr.write("flowdiff: fn requires a function name\n");
+  const blastMode = args[0] === "blast";
+  const fnName = fnMode || blastMode ? args[1] : null;
+  if ((fnMode || blastMode) && !fnName) {
+    process.stderr.write(`flowdiff: ${args[0]} requires a function name\n`);
     process.exit(1);
   }
-  const { base, head } = parseRevs(fnMode ? args.slice(2) : args);
+  const { base, head } = parseRevs(fnMode || blastMode ? args.slice(2) : args);
 
   let baseRef: string;
   let headRef: string;
@@ -163,6 +174,36 @@ function main(): void {
 
   const baseGraph = loadGraph(baseRef, cwd);
   const headGraph = loadGraph(headRef, cwd);
+
+  if (blastMode && fnName) {
+    const hits = findFn(headGraph, fnName);
+    if (hits.length === 0) {
+      process.stderr.write(`flowdiff: no function named "${fnName}" at ${label(head)}\n`);
+      process.exit(1);
+    }
+    if (hits.length > 1) {
+      process.stderr.write(`flowdiff: "${fnName}" is ambiguous — pick one:\n`);
+      for (const h of hits) process.stderr.write(`  ${h.id}\n`);
+      process.exit(1);
+    }
+    const symptom = hits[0];
+    const diff = diffGraphs(baseGraph, headGraph);
+    const changedKind = changedTargets(diff);
+    const targets = new Set(changedKind.keys());
+    process.stdout.write(
+      renderBlast(
+        symptom,
+        headGraph,
+        changedKind,
+        pathsToTargets(headGraph, symptom.id, targets, "down"),
+        pathsToTargets(headGraph, symptom.id, targets, "up"),
+        diff.removed,
+        label(base),
+        label(head),
+      ),
+    );
+    return;
+  }
 
   if (fnMode && fnName) {
     const befores = findFn(baseGraph, fnName);

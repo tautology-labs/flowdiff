@@ -196,6 +196,15 @@ export function pathsToTargets(
   return found;
 }
 
+/** The diff's surviving changed functions, keyed by id → change kind. */
+export function changedTargets(diff: GraphDiff): Map<string, string> {
+  const changed = new Map<string, string>();
+  for (const fn of diff.added) changed.set(fn.id, "added");
+  for (const m of diff.modified) changed.set(m.after.id, "modified");
+  for (const r of diff.renamed) changed.set(r.after.id, "renamed");
+  return changed;
+}
+
 /** Resolve a fn query: bare name, `Class.method`, full id, or `file#name` suffix. */
 export function findFn(graph: Graph, name: string): FnInfo[] {
   const hits: FnInfo[] = [];
