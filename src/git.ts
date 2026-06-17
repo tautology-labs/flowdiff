@@ -23,7 +23,7 @@ export function resolveRef(ref: string, cwd: string): string {
   return git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd).trim();
 }
 
-const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|java|py|ipynb|go)$/;
+const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|java|py|ipynb|go|rs)$/;
 const SKIP_RE =
   /(^|\/)(node_modules|dist|build|out|coverage|\.next|vendor|cdk\.out|\.serverless|__generated__|target|\.gradle|generated-sources|__pycache__|\.venv|venv|\.tox|site-packages|\.eggs|\.ipynb_checkpoints)(\/|$)|\.d\.ts$|\.min\.js$/;
 
@@ -31,12 +31,31 @@ export function isSourcePath(path: string): boolean {
   return SOURCE_RE.test(path) && !SKIP_RE.test(path);
 }
 
-export function listSourceFiles(ref: string, cwd: string): string[] {
+/**
+ * Test files by per-language convention. File-level only — Rust's in-file
+ * `#[cfg(test)] mod tests` and Python doctests aren't caught (would need
+ * module-level filtering).
+ */
+export function isTestPath(path: string): boolean {
+  const base = path.split("/").pop() ?? path;
+  if (/(^|\/)(tests?|__tests__|testdata|test)(\/)/.test(path)) return true;
+  if (/(^|\/)src\/test\//.test(path)) return true; // Maven/Gradle layout
+  if (/\.(test|spec)\.(tsx?|jsx?|mts|cts|mjs|cjs)$/.test(base)) return true;
+  if (/\.test-d\.ts$/.test(base)) return true;
+  if (/_test\.go$/.test(base)) return true;
+  if (/^test_.*\.py$/.test(base) || /_test\.py$/.test(base) || base === "conftest.py") return true;
+  if (/(Test|Tests|IT|ITCase)\.java$/.test(base)) return true;
+  return false;
+}
+
+export function listSourceFiles(ref: string, cwd: string, includeTests = true): string[] {
   const out =
     ref === WORKTREE
       ? git(["ls-files", "--cached", "--others", "--exclude-standard"], cwd)
       : git(["ls-tree", "-r", "--name-only", ref], cwd);
-  return out.split("\n").filter((f) => f && isSourcePath(f));
+  return out
+    .split("\n")
+    .filter((f) => f && isSourcePath(f) && (includeTests || !isTestPath(f)));
 }
 
 export function readFileAt(ref: string, path: string, cwd: string): string | null {

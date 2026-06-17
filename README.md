@@ -48,6 +48,7 @@ flowdiff -i                 # interactive: navigate the graph, → browses calle
 flowdiff --html > review.html   # self-contained interactive graph (no CDN, opens
                             # offline, attach to a PR); bare --html writes a file
 flowdiff roots              # locally-linked sibling services in the graph
+flowdiff --no-tests         # exclude test files (by language convention)
 flowdiff --json             # structured output — scripts, or context for an AI reviewer
 ```
 
@@ -79,6 +80,7 @@ Node ≥ 18. Two runtime dependencies, both pure JS, both parsers — no native 
 | Java | `java-parser` (Chevrotain, pure JS) | methods and constructors as `Class.method` / `Class.constructor`, incl. nested types, fluent/static/`this.` call chains | overloads share a name → bare-name queries list candidate ids; anonymous-class calls attribute to the anonymous member |
 | Python | built-in extractor (strings/comments blanked, bracket-aware indent scoping) | `def`/`async def`, methods as `Class.method`, decorators included in source and line | dynamic dispatch (`getattr`, exec) invisible to any static graph; untyped attribute calls resolve noisier than TS/Java; tree-sitter-WASM is the upgrade path |
 | Go | built-in extractor (literal/comment blanking, brace-matched bodies) | `func`s and methods as `Receiver.Method` (pointer receivers normalized), calls incl. closures | name-based resolution (a `w.Header()` may link to any `Header` method); `interface{}`/`struct{}` in signatures handled; interface method signatures (no body) skipped |
+| Rust | built-in extractor (raw-string/lifetime-aware blanking, brace-matched bodies) | `fn`s, and `impl`/`trait` methods as `Type.method`; calls incl. `Type::assoc` and `.method` | trait method *signatures* skipped, default methods kept; `<…>` generic depth not tracked; in-file `#[cfg(test)] mod tests` not excluded by `--no-tests` |
 | Jupyter (`.ipynb`) | code cells → Python extractor | same as Python | magics/`!shell` lines skipped; line numbers refer to concatenated cells, not cell positions |
 
 ## MCP — give the graph to your agent

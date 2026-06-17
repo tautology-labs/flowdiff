@@ -3,6 +3,7 @@ import { extractFunctions } from "./extract.js";
 import { extractJavaFunctions } from "./extract-java.js";
 import { extractPythonFunctions } from "./extract-python.js";
 import { extractGoFunctions } from "./extract-go.js";
+import { extractRustFunctions } from "./extract-rust.js";
 
 /** Route a file to its language extractor. Everything downstream of this —
  * graph, diff, rename detection, TUI, MCP — is language-agnostic. */
@@ -10,6 +11,7 @@ export function extractAny(path: string, text: string): FnInfo[] {
   if (path.endsWith(".java")) return extractJavaFunctions(path, text);
   if (path.endsWith(".py")) return extractPythonFunctions(path, text);
   if (path.endsWith(".go")) return extractGoFunctions(path, text);
+  if (path.endsWith(".rs")) return extractRustFunctions(path, text);
   if (path.endsWith(".ipynb")) return extractPythonFunctions(path, notebookToPython(text));
   return extractFunctions(path, text);
 }

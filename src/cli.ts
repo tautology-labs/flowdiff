@@ -31,12 +31,13 @@ Usage:
                                eval "$(flowdiff completions zsh)")
 
 Flags:
-  -i        interactive mode — navigate the graph, expand diffs, e to edit
-  --html    self-contained interactive HTML graph (redirect, or writes a file)
-  --json    machine-readable output (for scripts, or for feeding an AI)
-  --help    this text
+  -i         interactive mode — navigate the graph, expand diffs, e to edit
+  --html     self-contained interactive HTML graph (redirect, or writes a file)
+  --json     machine-readable output (for scripts, or for feeding an AI)
+  --no-tests exclude test files (by language convention) from the graph
+  --help     this text
 
-Languages: TypeScript, JavaScript, Java, Python, Go.
+Languages: TypeScript, JavaScript, Java, Python, Go, Rust.
 MCP server (callers/callees/flow_diff/blast_radius tools for AI agents):
   claude mcp add flowdiff -- node <path-to-flowdiff>/dist/mcp.js
 `;
@@ -81,8 +82,8 @@ _flowdiff() {
 compdef _flowdiff flowdiff
 `;
 
-function loadGraph(ref: string, cwd: string): Graph {
-  const paths = listSourceFiles(ref, cwd);
+function loadGraph(ref: string, cwd: string, includeTests = true): Graph {
+  const paths = listSourceFiles(ref, cwd, includeTests);
   const texts = readFilesAt(ref, paths, cwd);
   const files = paths
     .map((path) => ({ path, text: texts.get(path) ?? null }))
@@ -107,6 +108,7 @@ function main(): void {
   const json = argv.includes("--json");
   const html = argv.includes("--html");
   const interactive = argv.includes("-i") || argv.includes("--interactive");
+  const includeTests = !argv.includes("--no-tests");
   const args = argv.filter((a) => !a.startsWith("-"));
 
   if (argv.includes("--help") || argv.includes("-h")) {
@@ -177,8 +179,8 @@ function main(): void {
     process.exit(1);
   }
 
-  const baseGraph = loadGraph(baseRef, cwd);
-  const headGraph = loadGraph(headRef, cwd);
+  const baseGraph = loadGraph(baseRef, cwd, includeTests);
+  const headGraph = loadGraph(headRef, cwd, includeTests);
 
   if (blastMode && fnName) {
     const hits = findFn(headGraph, fnName);
@@ -250,7 +252,7 @@ function main(): void {
       headLabel: label(head),
       baseGraph,
       initialHead: headGraph,
-      loadHead: () => loadGraph(headRef, cwd),
+      loadHead: () => loadGraph(headRef, cwd, includeTests),
       headIsWorktree: headRef === WORKTREE,
     });
     return;
