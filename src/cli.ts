@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { listSourceFiles, readFilesAt, repoRoot, resolveRef, WORKTREE } from "./git.js";
 import {
   buildGraph,
@@ -10,6 +12,7 @@ import {
   type Graph,
 } from "./graph.js";
 import { renderBlast, renderDiff, renderFnDiff } from "./render.js";
+import { renderHtml } from "./html.js";
 import { runTui } from "./tui.js";
 import { discoverRoots } from "./roots.js";
 
@@ -29,6 +32,7 @@ Usage:
 
 Flags:
   -i        interactive mode — navigate the graph, expand diffs, e to edit
+  --html    self-contained interactive HTML graph (redirect, or writes a file)
   --json    machine-readable output (for scripts, or for feeding an AI)
   --help    this text
 
@@ -101,6 +105,7 @@ function parseRevs(args: string[]): { base: string; head: string } {
 function main(): void {
   const argv = process.argv.slice(2);
   const json = argv.includes("--json");
+  const html = argv.includes("--html");
   const interactive = argv.includes("-i") || argv.includes("--interactive");
   const args = argv.filter((a) => !a.startsWith("-"));
 
@@ -257,6 +262,19 @@ function main(): void {
     process.stdout.write(
       JSON.stringify(diffJson(diff, label(base), label(head)), null, 2) + "\n",
     );
+    return;
+  }
+
+  if (html) {
+    const doc = renderHtml(diff, baseGraph, headGraph, label(base), label(head));
+    if (process.stdout.isTTY) {
+      // Piping HTML to a terminal is useless — write a file and point at it.
+      const out = join(cwd, "flowdiff-review.html");
+      writeFileSync(out, doc);
+      process.stderr.write(`flowdiff: wrote ${out}\n`);
+    } else {
+      process.stdout.write(doc);
+    }
     return;
   }
 

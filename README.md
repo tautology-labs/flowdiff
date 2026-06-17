@@ -45,6 +45,8 @@ flowdiff blast handleRefund v1.42.0 v1.43.0
                             # the symptom? call paths included
 flowdiff -i                 # interactive: navigate the graph, → browses callers,
                             # enter expands diffs, e opens $EDITOR
+flowdiff --html > review.html   # self-contained interactive graph (no CDN, opens
+                            # offline, attach to a PR); bare --html writes a file
 flowdiff roots              # locally-linked sibling services in the graph
 flowdiff --json             # structured output — scripts, or context for an AI reviewer
 ```
@@ -127,8 +129,7 @@ Name-based call resolution is a deliberate v0 heuristic: it's wrong in the ways 
 
 ## Not yet
 
-- `--html`: a self-contained interactive graph export — clickable nodes, diff side panel; the artifact you attach to a PR (next up)
-- A GitHub Action that posts the flow summary (and the HTML artifact) as a PR comment
+- A GitHub Action that posts the flow summary (and the `--html` artifact) as a PR comment
 - Branch-level deltas (new `if`/`switch` arms inside a changed function)
 - Rename detection for *edited* renames (exact-body renames and moves are detected; renamed-and-changed still shows as remove + add)
 - Go and friends (one extractor file each); production-grade Python via tree-sitter-WASM
